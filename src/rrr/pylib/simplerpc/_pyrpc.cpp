@@ -184,8 +184,8 @@ static PyObject* _pyrpc_client_async_call(PyObject* self, PyObject* args) {
     Client* clnt = (Client*) u;
     Marshal* m = (Marshal*) m_id;
 
-    Future* fu = clnt->begin_request(rpc_id);
-    if (fu != NULL) {
+    mut_ptr<Future> fu = clnt->begin_request(rpc_id);
+    if (fu.raw_ != NULL) {
         // NOTE: We use Marshal as a buffer to packup an RPC message, then push it into
         //       client side buffer. Here is the only place that we are using Marshal's
         //       read_from_marshal function with non-empty Marshal object.
@@ -194,11 +194,11 @@ static PyObject* _pyrpc_client_async_call(PyObject* self, PyObject* args) {
     }
     clnt->end_request();
 
-    if (fu == NULL) {
+    if (fu.raw_ == NULL) {
         // ENOTCONN
         Py_RETURN_NONE;
     } else {
-        return Py_BuildValue("k", fu);
+        return Py_BuildValue("k", fu.raw_);
     }
 }
 
@@ -217,8 +217,9 @@ static PyObject* _pyrpc_client_sync_call(PyObject* self, PyObject* args) {
     Client* clnt = (Client*) u;
     Marshal* m = (Marshal*) m_id;
 
-    Future* fu = clnt->begin_request(rpc_id);
-    if (fu != NULL) {
+    mut_ptr<Future> fu = clnt->begin_request(rpc_id);
+
+    if (fu.raw_ != NULL) {
         // NOTE: We use Marshal as a buffer to packup an RPC message, then push it into
         //       client side buffer. Here is the only place that we are using Marshal's
         //       read_from_marshal function with non-empty Marshal object.
@@ -228,14 +229,14 @@ static PyObject* _pyrpc_client_sync_call(PyObject* self, PyObject* args) {
 
     Marshal* m_rep = new Marshal;
     int error_code;
-    if (fu == NULL) {
+    if (fu.raw_ == NULL) {
         error_code = ENOTCONN;
     } else {
         error_code = fu->get_error_code();
         if (error_code == 0) {
             m_rep->read_from_marshal(fu->get_reply(), fu->get_reply().content_size());
         }
-        fu->release();
+        // fu->release();
     }
 
     PyEval_RestoreThread(_save);
@@ -472,17 +473,18 @@ static PyObject* _pyrpc_future_wait(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "k", &fu_id))
         return NULL;
 
-    Future* fu = (Future*) fu_id;
+    own_ptr<Future> fu;
+    fu.reset((Future*) fu_id);
     Marshal* m_rep = new Marshal;
     int error_code;
-    if (fu == NULL) {
+    if (fu.raw_ == NULL) {
         error_code = ENOTCONN;
     } else {
         error_code = fu->get_error_code();
         if (error_code == 0) {
             m_rep->read_from_marshal(fu->get_reply(), fu->get_reply().content_size());
         }
-        fu->release();
+        // fu->release();
     }
 
     PyEval_RestoreThread(_save);
@@ -503,10 +505,11 @@ static PyObject* _pyrpc_future_timedwait(PyObject* self, PyObject* args) {
         return NULL;
     double wait_sec = wait_msec / 1000.0;
 
-    Future* fu = (Future*) fu_id;
+    own_ptr<Future> fu;
+    fu.reset((Future*) fu_id);
     Marshal* m_rep = new Marshal;
     int error_code;
-    if (fu == NULL) {
+    if (fu.raw_ == NULL) {
         error_code = ENOTCONN;
     } else {
         fu->timed_wait(wait_sec);
@@ -514,7 +517,7 @@ static PyObject* _pyrpc_future_timedwait(PyObject* self, PyObject* args) {
         if (error_code == 0) {
             m_rep->read_from_marshal(fu->get_reply(), fu->get_reply().content_size());
         }
-        fu->release();
+        // fu->release();
     }
 
     PyEval_RestoreThread(_save);

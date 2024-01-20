@@ -183,15 +183,15 @@ def emit_service_and_proxy(service, f, rpc_table):
                 out_counter += 1
             f.writeln("rrr::Future* async_%s(%sconst rrr::FutureAttr& __fu_attr__ = rrr::FutureAttr()) {" % (func.name, ", ".join(async_func_params + [""])))
             with f.indent():
-                f.writeln("rrr::Future* __fu__ = __cl__->begin_request(%sService::%s, __fu_attr__);" % (service.name, func.name.upper()))
+                f.writeln("mut_ptr<rrr::Future> __fu__ = __cl__->begin_request(%sService::%s, __fu_attr__);" % (service.name, func.name.upper()))
                 if len(async_call_params) > 0:
-                    f.writeln("if (__fu__ != nullptr) {")
+                    f.writeln("if (__fu__.raw_ != nullptr) {")
                     with f.indent():
                         for param in async_call_params:
                             f.writeln("*__cl__ << %s;" % param)
                     f.writeln("}")
                 f.writeln("__cl__->end_request();")
-                f.writeln("return __fu__;")
+                f.writeln("return __fu__.raw_;")
             f.writeln("}")
             f.writeln("rrr::i32 %s(%s) {" % (func.name, ", ".join(sync_func_params)))
             with f.indent():
@@ -207,7 +207,7 @@ def emit_service_and_proxy(service, f, rpc_table):
                         for param in sync_out_params:
                             f.writeln("__fu__->get_reply() >> *%s;" % param)
                     f.writeln("}")
-                f.writeln("__fu__->release();")
+                # f.writeln("__fu__->release();")
                 f.writeln("return __ret__;")
             f.writeln("}")
     f.writeln("};")

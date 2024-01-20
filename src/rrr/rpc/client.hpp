@@ -27,7 +27,7 @@ struct FutureAttr {
     std::function<void(Future*)> callback;
 };
 
-class Future: public RefCounted {
+class Future {
     friend class Client;
 
     i64 xid_;
@@ -46,10 +46,7 @@ class Future: public RefCounted {
 protected:
 
     // protected destructor as required by RefCounted.
-    ~Future() {
-        Pthread_mutex_destroy(&ready_m_);
-        Pthread_cond_destroy(&ready_cond_);
-    }
+    
 
 public:
 
@@ -57,6 +54,11 @@ public:
             : xid_(xid), error_code_(0), attr_(attr), ready_(false), timed_out_(false) {
         Pthread_mutex_init(&ready_m_, nullptr);
         Pthread_cond_init(&ready_cond_, nullptr);
+    }
+
+    ~Future() {
+        Pthread_mutex_destroy(&ready_m_);
+        Pthread_cond_destroy(&ready_cond_);
     }
 
     bool ready() {
@@ -86,9 +88,9 @@ public:
     }
 
     static inline void safe_release(Future* fu) {
-        if (fu != nullptr) {
-            fu->release();
-        }
+        // if (fu != nullptr) {
+        //     fu->release();
+        // }
     }
 };
 
@@ -113,9 +115,9 @@ public:
 
     ~FutureGroup() {
         wait_all();
-        for (auto& f : futures_) {
-            f->release();
-        }
+        // for (auto& f : futures_) {
+        //     f->release();
+        // }
     }
 };
 
@@ -123,6 +125,7 @@ public:
     Marshal in_, out_;
     uint64_t cnt_;
 
+    own_ptr<Future> null_ptr_;
     /**
      * NOT a refcopy! This is intended to avoid circular reference, which prevents everything from being released correctly.
      */
@@ -144,7 +147,7 @@ public:
     own_ptr<Marshal::bookmark> bmark_;
 
     Counter xid_counter_;
-    std::unordered_map<i64, Future*> pending_fu_;
+    std::unordered_map<i64, mut_ptr<Future>> pending_fu_;
 		std::unordered_map<i64, struct timespec> rpc_starts;
 
     SpinLock pending_fu_l_;
@@ -168,6 +171,7 @@ public:
    }
 
    Client(const_ptr<PollMgr> pollmgr): pollmgr_(pollmgr), sock_(-1), status_(NEW) {
+    null_ptr_.reset(nullptr);
     bmark_.reset(nullptr);
     // if (pollmgr == nullptr) {
     //     pollmgr_.reset(new PollMgr);
@@ -181,7 +185,7 @@ public:
      *
      * The request packet format is: <size> <xid> <rpc_id> <arg1> <arg2> ... <argN>
      */
-    Future* begin_request(i32 rpc_id, const FutureAttr& attr = FutureAttr());
+    mut_ptr<Future> begin_request(i32 rpc_id, const FutureAttr& attr = FutureAttr());
 
     void end_request();
 
