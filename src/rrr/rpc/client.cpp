@@ -510,10 +510,12 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
   fu.reset(new Future(xid_counter_.next(), attr));
 
   mut_ptr<Future> m_fu = borrow_mut(fu);
-
+  auto xid_copy = m_fu->xid_;
+  std::cout << xid_copy << std::endl;
+  
   pending_fu_l_.lock();
 
-  pending_fu_.insert(std::make_pair(fu->xid_, std::move(m_fu)));
+  pending_fu_.insert(std::make_pair(xid_copy, std::move(m_fu)));
   //pending_fu_[fu->xid_] = m_fu;
   pending_fu_l_.unlock();
 
@@ -524,7 +526,7 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
   // check if the client gets closed in the meantime
   if (status_ != CONNECTED) {
     pending_fu_l_.lock();
-    unordered_map<i64, mut_ptr<Future>>::iterator it = pending_fu_.find(fu->xid_);
+    unordered_map<i64, mut_ptr<Future>>::iterator it = pending_fu_.find(xid_copy);
     if (it != pending_fu_.end()) {
       //it->second->release();
       pending_fu_.erase(it);
@@ -537,7 +539,7 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
 
   bmark_.reset(out_.set_bookmark(sizeof(i32))); // will fill packet size later
 
-  *this << v64(fu->xid_);
+  *this << v64(xid_copy);
   *this << rpc_id;
 	rpc_id_ = rpc_id;
 
