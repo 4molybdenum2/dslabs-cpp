@@ -79,7 +79,7 @@ void Client::set_valid(bool valid) {
 }
 
 void Client::invalidate_pending_futures() {
-	list<mut_ptr<Future>> futures;
+	list<own_ptr<Future>> futures;
   pending_fu_l_.lock();
   for (auto& it: pending_fu_) {
 
@@ -250,15 +250,13 @@ bool Client::handle_read(){
       in_ >> v_reply_xid >> v_error_code;
 
       pending_fu_l_.lock();
-      unordered_map<i64, mut_ptr<Future>>::iterator
-          it = pending_fu_.find(v_reply_xid.get());
+      unordered_map<i64, own_ptr<Future>>::iterator it = pending_fu_.find(v_reply_xid.get());
       if (it != pending_fu_.end()) {
         // own_ptr<Future> fu;
         // fu.reset(it->second);
-        mut_ptr<Future>& fu = it->second;
+        mut_ptr<Future> fu = borrow_mut(it->second); // TODO
+
         verify(fu->xid_ == v_reply_xid.get());
-        pending_fu_.erase(it);
-        pending_fu_l_.unlock();
 
         fu->error_code_ = v_error_code.get();
         fu->reply_.read_from_marshal(in_,
@@ -266,7 +264,9 @@ bool Client::handle_read(){
                                          - v_error_code.val_size());
 
         fu->notify_ready();
-
+        //fu.reset();
+        pending_fu_.erase(it);
+        pending_fu_l_.unlock();
         // since we removed it from pending_fu_
         // fu->release();
       } else {
@@ -344,12 +344,10 @@ iters = 5;
       in_ >> v_reply_xid >> v_error_code;
 
       pending_fu_l_.lock();
-      unordered_map<i64, mut_ptr<Future>>::iterator
-        it = pending_fu_.find(v_reply_xid.get());
+      unordered_map<i64, own_ptr<Future>>::iterator it = pending_fu_.find(v_reply_xid.get());
+
       if(it != pending_fu_.end()){
-        // own_ptr<Future> fu;
-        // fu.reset(it->second);
-        mut_ptr<Future>& fu = it->second;
+        mut_ptr<Future> fu = borrow_mut(it->second);
         verify(fu->xid_ == v_reply_xid.get());
 
 				
@@ -380,8 +378,6 @@ iters = 5;
 					time_ = 0;
 				}*/
 
-        pending_fu_.erase(it);
-        pending_fu_l_.unlock();
 				
 				fu->error_code_ = v_error_code.get();
         fu->reply_.read_from_marshal(in_,
@@ -389,6 +385,9 @@ iters = 5;
 				         - v_error_code.val_size());
         
 				fu->notify_ready();
+        //fu.reset();
+        pending_fu_.erase(it);
+        pending_fu_l_.unlock();
         //fu->release();
       } else{
         pending_fu_l_.unlock();
@@ -509,13 +508,13 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
   own_ptr<Future> fu;
   fu.reset(new Future(xid_counter_.next(), attr));
 
-  mut_ptr<Future> m_fu = borrow_mut(fu);
-  auto xid_copy = m_fu->xid_;
-  std::cout << xid_copy << std::endl;
+  auto xid_copy = fu->xid_;
   
   pending_fu_l_.lock();
 
-  pending_fu_.insert(std::make_pair(xid_copy, std::move(m_fu)));
+  pending_fu_.insert(std::make_pair(xid_copy, std::move(fu)));
+
+  mut_ptr<Future> m_fu = borrow_mut(pending_fu_[xid_copy]);
   //pending_fu_[fu->xid_] = m_fu;
   pending_fu_l_.unlock();
 
@@ -526,7 +525,7 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
   // check if the client gets closed in the meantime
   if (status_ != CONNECTED) {
     pending_fu_l_.lock();
-    unordered_map<i64, mut_ptr<Future>>::iterator it = pending_fu_.find(xid_copy);
+    unordered_map<i64, own_ptr<Future>>::iterator it = pending_fu_.find(xid_copy);
     if (it != pending_fu_.end()) {
       //it->second->release();
       pending_fu_.erase(it);

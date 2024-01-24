@@ -147,7 +147,7 @@ public:
     own_ptr<Marshal::bookmark> bmark_;
 
     Counter xid_counter_;
-    std::unordered_map<i64, mut_ptr<Future>> pending_fu_;
+    std::unordered_map<i64, own_ptr<Future>> pending_fu_;
 		std::unordered_map<i64, struct timespec> rpc_starts;
 
     SpinLock pending_fu_l_;
