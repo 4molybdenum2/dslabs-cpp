@@ -184,8 +184,8 @@ static PyObject* _pyrpc_client_async_call(PyObject* self, PyObject* args) {
     Client* clnt = (Client*) u;
     Marshal* m = (Marshal*) m_id;
 
-    mut_ptr<Future> fu = clnt->begin_request(rpc_id);
-    if (fu.raw_ != NULL) {
+    Future* fu = clnt->begin_request(rpc_id);
+    if (fu != NULL) {
         // NOTE: We use Marshal as a buffer to packup an RPC message, then push it into
         //       client side buffer. Here is the only place that we are using Marshal's
         //       read_from_marshal function with non-empty Marshal object.
@@ -194,11 +194,11 @@ static PyObject* _pyrpc_client_async_call(PyObject* self, PyObject* args) {
     }
     clnt->end_request();
 
-    if (fu.raw_ == NULL) {
+    if (fu == NULL) {
         // ENOTCONN
         Py_RETURN_NONE;
     } else {
-        return Py_BuildValue("k", fu.raw_);
+        return Py_BuildValue("k", fu);
     }
 }
 
@@ -217,9 +217,9 @@ static PyObject* _pyrpc_client_sync_call(PyObject* self, PyObject* args) {
     Client* clnt = (Client*) u;
     Marshal* m = (Marshal*) m_id;
 
-    mut_ptr<Future> fu = clnt->begin_request(rpc_id);
+    Future* fu = clnt->begin_request(rpc_id);
 
-    if (fu.raw_ != NULL) {
+    if (fu != NULL) {
         // NOTE: We use Marshal as a buffer to packup an RPC message, then push it into
         //       client side buffer. Here is the only place that we are using Marshal's
         //       read_from_marshal function with non-empty Marshal object.
@@ -229,7 +229,7 @@ static PyObject* _pyrpc_client_sync_call(PyObject* self, PyObject* args) {
 
     Marshal* m_rep = new Marshal;
     int error_code;
-    if (fu.raw_ == NULL) {
+    if (fu == NULL) {
         error_code = ENOTCONN;
     } else {
         error_code = fu->get_error_code();

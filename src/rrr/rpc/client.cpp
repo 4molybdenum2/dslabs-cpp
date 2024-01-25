@@ -264,7 +264,7 @@ bool Client::handle_read(){
                                          - v_error_code.val_size());
 
         fu->notify_ready();
-        //fu.reset();
+        fu.reset();
         pending_fu_.erase(it);
         pending_fu_l_.unlock();
         // since we removed it from pending_fu_
@@ -343,6 +343,8 @@ iters = 5;
 
       in_ >> v_reply_xid >> v_error_code;
 
+      std::cout << "read xid " << v_reply_xid.get() << " from marshal " << std::endl;
+
       pending_fu_l_.lock();
       unordered_map<i64, own_ptr<Future>>::iterator it = pending_fu_.find(v_reply_xid.get());
 
@@ -385,7 +387,7 @@ iters = 5;
 				         - v_error_code.val_size());
         
 				fu->notify_ready();
-        //fu.reset();
+        fu.reset();
         pending_fu_.erase(it);
         pending_fu_l_.unlock();
         //fu->release();
@@ -479,6 +481,7 @@ void Client::handle_free(i64 xid) {
   if (it != pending_fu_.end()) {
     pending_fu_.erase(it);
     //Future::safe_release(it->second);
+    it->second.reset();
   }
   pending_fu_l_.unlock();
 }
@@ -493,16 +496,13 @@ int Client::poll_mode() {
   return mode;
 }
 
-mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =... */) {
+Future* Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =... */) {
   //auto start = chrono::steady_clock::now();
 	
   out_l_.lock();
-	
-  mut_ptr<Future> mut_null_ptr_ = borrow_mut(null_ptr_);
-
   if (status_ != CONNECTED) {
     //Log_info("NOT CONNECTED");
-    return mut_null_ptr_;
+    return nullptr;
   }
 
   own_ptr<Future> fu;
@@ -511,11 +511,8 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
   auto xid_copy = fu->xid_;
   
   pending_fu_l_.lock();
-
   pending_fu_.insert(std::make_pair(xid_copy, std::move(fu)));
 
-  mut_ptr<Future> m_fu = borrow_mut(pending_fu_[xid_copy]);
-  //pending_fu_[fu->xid_] = m_fu;
   pending_fu_l_.unlock();
 
 	struct timespec begin;
@@ -533,7 +530,7 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
     pending_fu_l_.unlock();
 
     //Log_info("NOT CONNECTED 2");
-    return mut_null_ptr_;
+    return nullptr;
   }
 
   bmark_.reset(out_.set_bookmark(sizeof(i32))); // will fill packet size later
@@ -548,7 +545,7 @@ mut_ptr<Future> Client::begin_request(i32 rpc_id, const FutureAttr& attr /* =...
   //Log_info("EXITING begin_request");
   // one ref is already in pending_fu_
   // return (Future*) fu->ref_copy();
-  return m_fu; // TODO, fix this
+  return pending_fu_[xid_copy].raw_; // TODO, fix this
 }
 
 void Client::end_request() {

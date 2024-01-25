@@ -185,7 +185,7 @@ public:
      *
      * The request packet format is: <size> <xid> <rpc_id> <arg1> <arg2> ... <argN>
      */
-    mut_ptr<Future> begin_request(i32 rpc_id, const FutureAttr& attr = FutureAttr());
+    Future* begin_request(i32 rpc_id, const FutureAttr& attr = FutureAttr());
 
     void end_request();
 
